@@ -12,14 +12,14 @@ import WaveSurfer from 'wavesurfer.js';
   imports: [CommonModule, LucideAngularModule, RouterLink],
   template: `
     <div class="min-h-screen flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
-      <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 p-6">
+      <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 relative overflow-hidden">
       @if (loading()) {
         <div class="flex flex-col items-center justify-center py-20 space-y-4">
           <div class="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
           <p class="text-slate-500 dark:text-slate-400 font-medium animate-pulse">Loading audio...</p>
         </div>
       } @else if (error()) {
-        <div class="text-center py-12">
+        <div class="text-center py-12 p-6">
           <div class="w-16 h-16 bg-red-50 dark:bg-red-900/30 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
             <lucide-icon name="alert-circle" [size]="32"></lucide-icon>
           </div>
@@ -28,16 +28,30 @@ import WaveSurfer from 'wavesurfer.js';
           <a routerLink="/" class="text-indigo-600 dark:text-indigo-400 font-medium hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline">Create New Audio</a>
         </div>
       } @else {
+      
+      <!-- Background Image (Full Width Header) -->
+      @if (audio()?.image_public_url) {
+        <div class="relative w-full h-64 z-0">
+            <img [src]="audio()?.image_public_url" class="w-full h-full object-cover">
+            <!-- Fade to background color -->
+            <div class="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-white via-white/80 to-transparent dark:from-slate-800 dark:via-slate-800/80 dark:to-transparent"></div>
+        </div>
+      }
+
+      <div class="relative z-10 px-8 pb-8" [class.pt-8]="!audio()?.image_public_url" [class.-mt-12]="audio()?.image_public_url">
         <div class="text-center mb-8">
-          <div class="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm transform -rotate-3">
-            <lucide-icon name="share-2" [size]="32"></lucide-icon>
-          </div>
-          <h1 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">{{ audio()?.title }}</h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400">Shared via AudioShare</p>
+          @if (!audio()?.image_public_url) {
+            <div class="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm transform -rotate-3">
+                <lucide-icon name="share-2" [size]="32"></lucide-icon>
+            </div>
+          }
+
+          <h1 class="text-3xl font-bold text-center mb-2 text-slate-800 dark:text-white drop-shadow-sm">{{ audio()?.title }}</h1>
+          <p class="text-sm text-center mb-8 text-slate-500 dark:text-slate-400 font-medium">Shared via AudioShare</p>
         </div>
 
         <!-- Audio Player Custom -->
-        <div class="mb-8">
+        <div class="mb-8 p-4 rounded-xl bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border border-slate-100 dark:border-slate-700/50 shadow-sm">
             <div #waveform class="w-full mb-4"></div>
             
             <div class="flex justify-center">
@@ -80,9 +94,10 @@ import WaveSurfer from 'wavesurfer.js';
              </a>
           </div>
         </div>
-      }
       </div>
+      }
     </div>
+  </div>
   `
 })
 export class ShareComponent implements OnInit, AfterViewInit {

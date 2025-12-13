@@ -26,15 +26,48 @@ import { LucideAngularModule } from 'lucide-angular';
           </div>
         }
 
-        <!-- Title Input -->
-        <div class="mb-6">
-          <label class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Title</label>
-          <input 
-            [formControl]="titleControl"
-            type="text" 
-            placeholder="Give your audio a name..." 
-            class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900 outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
-          />
+        <!-- Title Input & Cover Image -->
+        <div class="mb-6 space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Title</label>
+            <input 
+              [formControl]="titleControl"
+              type="text" 
+              placeholder="Give your audio a name..." 
+              class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900 outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            />
+          </div>
+
+          <!-- Cover Image Selector -->
+          <div class="flex items-center gap-4">
+            <button 
+              (click)="imageInput.click()"
+              class="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+            >
+              <div class="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center border border-slate-200 dark:border-slate-600">
+                @if (imageFile()) {
+                   <img [src]="imagePreviewUrl()" class="w-full h-full object-cover rounded-lg" />
+                } @else {
+                   <lucide-icon name="image" [size]="18"></lucide-icon>
+                }
+              </div>
+              {{ imageFile() ? 'Change Cover Image' : 'Add Cover Image (Optional)' }}
+            </button>
+            
+            @if (imageFile()) {
+                <button (click)="removeImage()" class="text-slate-400 hover:text-red-500 transition-colors p-1">
+                    <lucide-icon name="x" [size]="16"></lucide-icon>
+                </button>
+            }
+
+            <input 
+              #imageInput
+              type="file" 
+              accept="image/*" 
+              class="hidden"
+              (change)="onImageSelected($event)"
+            />
+          </div>
         </div>
 
         <!-- Tabs -->
@@ -186,6 +219,10 @@ export class HomeComponent implements OnDestroy {
   recordedUrl = signal<string | null>(null); // Changed from computed to signal as per instruction
   uploadedFile = signal<File | null>(null);
   isDragging = signal(false);
+
+  // Cover Image State
+  imageFile = signal<File | null>(null);
+  imagePreviewUrl = signal<string | null>(null);
 
   // Submit State
   isSubmitting = signal(false);
@@ -380,6 +417,19 @@ export class HomeComponent implements OnDestroy {
   }
 
   // Upload Logic
+  onImageSelected(event: any) {
+    const file = event.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      this.imageFile.set(file);
+      this.imagePreviewUrl.set(URL.createObjectURL(file));
+    }
+  }
+
+  removeImage() {
+    this.imageFile.set(null);
+    this.imagePreviewUrl.set(null);
+  }
+
   onFileSelected(event: any) {
     const file = event.target.files[0];
     if (file && file.type.startsWith('audio/')) {
@@ -420,11 +470,12 @@ export class HomeComponent implements OnDestroy {
 
     this.isSubmitting.set(true);
     const title = this.titleControl.value!;
+    const image = this.imageFile() || undefined;
 
     // Determine what to upload
     const uploadData = blob || file!;
 
-    this.audioService.createAudio(uploadData, title).subscribe({
+    this.audioService.createAudio(uploadData, title, image).subscribe({
       next: (id) => {
         this.router.navigate(['/s', id]);
       },

@@ -11,6 +11,8 @@ export interface AudioRecord {
     mime_type: string;
     storage_path: string;
     public_url: string;
+    image_storage_path?: string;
+    image_public_url?: string;
     transcription?: string;
     summary?: string;
     blob?: Blob; // Helper for client-side usage, not in DB
@@ -26,29 +28,59 @@ export class AudioService {
         this.supabase = createClient(environment.supabaseUrl, environment.supabaseKey);
     }
 
-    createAudio(blob: Blob, title: string): Observable<string> {
+    createAudio(blob: Blob, title: string, imageFile?: File): Observable<string> {
         const fileExt = blob.type.split('/')[1] || 'webm';
         const fileName = `${crypto.randomUUID()}.${fileExt}`;
         const filePath = `${fileName}`; // bucket/filename
 
-        // 1. Upload to Storage
-        return from(this.supabase.storage.from('audios').upload(filePath, blob, {
-            contentType: blob.type,
-            upsert: false
-        })).pipe(
-            switchMap(({ data, error }) => {
-                if (error) throw error;
+        // Prepare Uploads
+        const uploads: Promise<any>[] = [
+            this.supabase.storage.from('audios').upload(filePath, blob, {
+                contentType: blob.type,
+                upsert: false
+            })
+        ];
 
-                // 2. Get Public URL
-                const { data: { publicUrl } } = this.supabase.storage.from('audios').getPublicUrl(filePath);
+        let imagePath: string | undefined;
 
-                // 3. Insert into Database
+        if (imageFile) {
+            const imgExt = imageFile.name.split('.').pop() || 'png';
+            imagePath = `images/${crypto.randomUUID()}.${imgExt}`;
+            uploads.push(
+                this.supabase.storage.from('audios').upload(imagePath, imageFile, {
+                    contentType: imageFile.type,
+                    upsert: false
+                })
+            );
+        }
+
+        return from(Promise.all(uploads)).pipe(
+            switchMap((results) => {
+                // results[0] is audio, results[1] is image (if existing)
+                const audioError = results[0].error;
+                if (audioError) throw audioError;
+
+                const imageError = results[1]?.error;
+                if (imageError) throw imageError;
+
+                // Get Public URLs
+                const { data: { publicUrl: audioPublicUrl } } = this.supabase.storage.from('audios').getPublicUrl(filePath);
+
+                let imagePublicUrl: string | undefined;
+                if (imagePath) {
+                    const { data: { publicUrl } } = this.supabase.storage.from('audios').getPublicUrl(imagePath);
+                    imagePublicUrl = publicUrl;
+                }
+
+                // Insert into Database
                 const dbRecord = {
                     title: title,
                     file_name: fileName,
                     mime_type: blob.type,
                     storage_path: filePath,
-                    public_url: publicUrl
+                    public_url: audioPublicUrl,
+                    image_storage_path: imagePath || null,
+                    image_public_url: imagePublicUrl || null
                 };
 
                 return from(this.supabase.from('audios').insert(dbRecord).select().single());

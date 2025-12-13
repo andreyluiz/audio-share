@@ -125,47 +125,37 @@ export class ShareComponent implements OnInit, AfterViewInit {
 
   async ngOnInit() {
     const id = this.route.snapshot.paramMap.get('id');
-    if (!id) {
-      this.error.set(true);
-      this.loading.set(false);
-      return;
-    }
-
     const fullShareUrl = `${environment.baseUrl}/s/${id}`;
     this.shareUrl.set(fullShareUrl);
 
-    this.audioService.getAudio(id).subscribe({
-      next: (record) => {
-        this.loading.set(false);
+    // Consume data from Resolver
+    this.route.data.subscribe(({ audio }) => {
+      this.loading.set(false);
 
-        if (record) {
-          this.audio.set(record);
+      if (audio) {
+        this.audio.set(audio);
 
-          // SEO Metadata
-          this.titleService.setTitle(`${record.title} | AudioShare`);
-          this.metaService.updateTag({ name: 'description', content: 'Listen to this audio shared via AudioShare' });
-          this.metaService.updateTag({ property: 'og:title', content: record.title });
-          this.metaService.updateTag({ property: 'og:description', content: 'Listen to this audio shared via AudioShare' });
-          this.metaService.updateTag({ property: 'og:url', content: fullShareUrl });
+        // SEO Metadata - SET IMMEDIATELY
+        this.titleService.setTitle(`${audio.title} | AudioShare`);
+        this.metaService.updateTag({ name: 'description', content: 'Listen to this audio shared via AudioShare' });
+        this.metaService.updateTag({ property: 'og:title', content: audio.title });
+        this.metaService.updateTag({ property: 'og:description', content: 'Listen to this audio shared via AudioShare' });
+        this.metaService.updateTag({ property: 'og:url', content: fullShareUrl });
 
-          if (record.image_public_url) {
-            this.metaService.updateTag({ property: 'og:image', content: record.image_public_url });
-            this.metaService.updateTag({ name: 'twitter:image', content: record.image_public_url });
-            this.metaService.updateTag({ name: 'twitter:card', content: 'summary_large_image' });
-          } else {
-            this.metaService.updateTag({ name: 'twitter:card', content: 'summary' });
-          }
-
-          if (isPlatformBrowser(this.platformId)) {
-            this.generateQR();
-            setTimeout(() => this.initWaveSurfer(record.public_url), 50);
-          }
+        if (audio.image_public_url) {
+          this.metaService.updateTag({ property: 'og:image', content: audio.image_public_url });
+          this.metaService.updateTag({ name: 'twitter:image', content: audio.image_public_url });
+          this.metaService.updateTag({ name: 'twitter:card', content: 'summary_large_image' });
         } else {
-          this.error.set(true);
+          this.metaService.updateTag({ name: 'twitter:card', content: 'summary' });
         }
-      },
-      error: () => {
-        this.loading.set(false);
+
+        // Browser-only interactive elements
+        if (isPlatformBrowser(this.platformId)) {
+          this.generateQR();
+          setTimeout(() => this.initWaveSurfer(audio.public_url), 50);
+        }
+      } else {
         this.error.set(true);
       }
     });

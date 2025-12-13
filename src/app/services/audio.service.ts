@@ -1,7 +1,8 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject, PLATFORM_ID } from '@angular/core';
 import { Observable, from, map, switchMap } from 'rxjs';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { environment } from '../../environments/environment';
+import { isPlatformBrowser } from '@angular/common';
 
 export interface AudioRecord {
     id: string;
@@ -23,9 +24,16 @@ export interface AudioRecord {
 })
 export class AudioService {
     private supabase: SupabaseClient;
+    private platformId = inject(PLATFORM_ID);
 
     constructor() {
-        this.supabase = createClient(environment.supabaseUrl, environment.supabaseKey);
+        this.supabase = createClient(environment.supabaseUrl, environment.supabaseKey, {
+            auth: {
+                persistSession: isPlatformBrowser(this.platformId),
+                autoRefreshToken: isPlatformBrowser(this.platformId),
+                detectSessionInUrl: isPlatformBrowser(this.platformId)
+            }
+        });
     }
 
     createAudio(blob: Blob, title: string, imageFile?: File): Observable<string> {

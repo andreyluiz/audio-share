@@ -1,10 +1,12 @@
-import { Component, inject, signal, OnInit, ElementRef, ViewChild, AfterViewInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, signal, OnInit, ElementRef, ViewChild, AfterViewInit, PLATFORM_ID } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AudioService, AudioRecord } from '../services/audio.service';
 import { LucideAngularModule } from 'lucide-angular';
+import { Title, Meta } from '@angular/platform-browser';
 import * as QRCode from 'qrcode';
 import WaveSurfer from 'wavesurfer.js';
+import { environment } from '../../environments/environment';
 
 @Component({
   selector: 'app-share',
@@ -103,6 +105,9 @@ import WaveSurfer from 'wavesurfer.js';
 export class ShareComponent implements OnInit, AfterViewInit {
   route = inject(ActivatedRoute);
   audioService = inject(AudioService);
+  titleService = inject(Title);
+  metaService = inject(Meta);
+  platformId = inject(PLATFORM_ID);
 
   loading = signal(true);
   error = signal(false);
@@ -126,17 +131,35 @@ export class ShareComponent implements OnInit, AfterViewInit {
       return;
     }
 
-    this.shareUrl.set(window.location.href);
+    const fullShareUrl = `${environment.baseUrl}/s/${id}`;
+    this.shareUrl.set(fullShareUrl);
 
     this.audioService.getAudio(id).subscribe({
       next: (record) => {
-        this.loading.set(false); // Update view state first to render the @else block containing #waveform
+        this.loading.set(false);
 
         if (record) {
           this.audio.set(record);
-          this.generateQR();
-          // Initialize WaveSurfer after view update confirm
-          setTimeout(() => this.initWaveSurfer(record.public_url), 50);
+
+          // SEO Metadata
+          this.titleService.setTitle(`${record.title} | AudioShare`);
+          this.metaService.updateTag({ name: 'description', content: 'Listen to this audio shared via AudioShare' });
+          this.metaService.updateTag({ property: 'og:title', content: record.title });
+          this.metaService.updateTag({ property: 'og:description', content: 'Listen to this audio shared via AudioShare' });
+          this.metaService.updateTag({ property: 'og:url', content: fullShareUrl });
+
+          if (record.image_public_url) {
+            this.metaService.updateTag({ property: 'og:image', content: record.image_public_url });
+            this.metaService.updateTag({ name: 'twitter:image', content: record.image_public_url });
+            this.metaService.updateTag({ name: 'twitter:card', content: 'summary_large_image' });
+          } else {
+            this.metaService.updateTag({ name: 'twitter:card', content: 'summary' });
+          }
+
+          if (isPlatformBrowser(this.platformId)) {
+            this.generateQR();
+            setTimeout(() => this.initWaveSurfer(record.public_url), 50);
+          }
         } else {
           this.error.set(true);
         }

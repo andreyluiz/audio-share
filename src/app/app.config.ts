@@ -1,11 +1,13 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { ApplicationConfig, provideBrowserGlobalErrorListeners, importProvidersFrom } from '@angular/core';
 import { provideRouter } from '@angular/router';
+import { LucideAngularModule, Mic, Upload, Play, Square, FileAudio, Share2, Link, Copy, Check, Download, AlertCircle, X } from 'lucide-angular';
 
 import { routes } from './app.routes';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
-    provideRouter(routes)
+    provideRouter(routes),
+    importProvidersFrom(LucideAngularModule.pick({ Mic, Upload, Play, Square, FileAudio, Share2, Link, Copy, Check, Download, AlertCircle, X }))
   ]
 };

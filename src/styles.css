@@ -1,3 +1,21 @@
 /* You can add global styles to this file, and also import other style files */
 
 @import "tailwindcss";
+
+@layer base {
+
+  html,
+  body {
+    @apply font-sans antialiased bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: 'Outfit', sans-serif;
+  }
+}

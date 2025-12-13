@@ -1,0 +1,327 @@
+import { Component, inject, signal, computed, ViewChild, ElementRef, OnDestroy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule, ReactiveFormsModule, FormControl, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
+import { AudioService } from '../services/audio.service';
+import { LucideAngularModule } from 'lucide-angular';
+
+@Component({
+  selector: 'app-home',
+  standalone: true,
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, LucideAngularModule],
+  template: `
+    <div class="min-h-screen flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
+      <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 p-6">
+        <h1 class="text-3xl font-bold text-center mb-8 text-slate-800 dark:text-white">Share Audio</h1>
+
+        <!-- Error Message -->
+        @if (errorMessage()) {
+          <div class="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3">
+             <div class="text-red-500 dark:text-red-400 mt-0.5"><lucide-icon name="alert-circle" [size]="20"></lucide-icon></div>
+             <div>
+               <h3 class="text-sm font-semibold text-red-800 dark:text-red-300">Error</h3>
+               <p class="text-sm text-red-600 dark:text-red-400 mt-1">{{ errorMessage() }}</p>
+             </div>
+             <button (click)="errorMessage.set(null)" class="text-red-400 hover:text-red-600 dark:hover:text-red-300 ml-auto"><lucide-icon name="x" [size]="16"></lucide-icon></button>
+          </div>
+        }
+
+        <!-- Title Input -->
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Title</label>
+          <input 
+            [formControl]="titleControl"
+            type="text" 
+            placeholder="Give your audio a name..." 
+            class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900 outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
+          />
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex p-1 bg-slate-50 dark:bg-slate-900 rounded-xl mb-6 border border-slate-100 dark:border-slate-700">
+          <button 
+            (click)="mode.set('record')"
+            [class.bg-white]="mode() === 'record'"
+            [class.dark:bg-slate-700]="mode() === 'record'"
+            [class.shadow-sm]="mode() === 'record'"
+            [class.text-indigo-600]="mode() === 'record'"
+            [class.dark:text-indigo-400]="mode() === 'record'"
+            class="flex-1 py-2.5 rounded-lg text-sm font-medium text-slate-500 dark:text-slate-400 transition-all flex items-center justify-center gap-2"
+          >
+            <lucide-icon name="mic" [size]="18"></lucide-icon>
+            Record
+          </button>
+          <button 
+            (click)="mode.set('upload')"
+            [class.bg-white]="mode() === 'upload'"
+            [class.dark:bg-slate-700]="mode() === 'upload'"
+            [class.shadow-sm]="mode() === 'upload'"
+            [class.text-indigo-600]="mode() === 'upload'"
+            [class.dark:text-indigo-400]="mode() === 'upload'"
+            class="flex-1 py-2.5 rounded-lg text-sm font-medium text-slate-500 dark:text-slate-400 transition-all flex items-center justify-center gap-2"
+          >
+            <lucide-icon name="upload" [size]="18"></lucide-icon>
+            Upload
+          </button>
+        </div>
+
+        <!-- Record Mode -->
+        <div *ngIf="mode() === 'record'" class="flex flex-col items-center justify-center py-8 min-h-[12rem] bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 mb-6">
+          
+          @if (!recordedBlob()) {
+            <div class="relative mb-4 group">
+              <div *ngIf="isRecording()" class="absolute inset-0 bg-red-500 rounded-full animate-ping opacity-20"></div>
+              <button 
+                (click)="toggleRecording()"
+                [class.bg-red-500]="isRecording()"
+                [class.bg-indigo-600]="!isRecording()"
+                class="relative w-20 h-20 rounded-full flex items-center justify-center text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
+              >
+                <lucide-icon [name]="isRecording() ? 'square' : 'mic'" [size]="32"></lucide-icon>
+              </button>
+            </div>
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
+              {{ isRecording() ? 'Recording... ' + recordingTime() + 's' : 'Tap to Record' }}
+            </p>
+          } @else {
+            <div class="w-full px-6">
+              <div class="flex items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm mb-4">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                    <lucide-icon name="file-audio" [size]="20"></lucide-icon>
+                  </div>
+                  <div>
+                    <p class="text-sm font-medium text-slate-700 dark:text-slate-200">Recorded Audio</p>
+                    <p class="text-xs text-slate-400 dark:text-slate-500">{{ (recordedBlob()?.size || 0) / 1024 | number:'1.0-1'}} KB</p>
+                  </div>
+                </div>
+                <button 
+                  (click)="resetRecording()"
+                  class="text-xs font-medium text-red-500 hover:text-red-600 px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+              
+              <audio [src]="recordedUrl()" controls class="w-full mb-2"></audio>
+            </div>
+          }
+        </div>
+
+        <!-- Upload Mode -->
+        <div *ngIf="mode() === 'upload'" class="mb-6">
+          <div 
+            (dragover)="onDragOver($event)"
+            (dragleave)="onDragLeave($event)"
+            (drop)="onDrop($event)"
+            [class.border-indigo-500]="isDragging()"
+            [class.bg-indigo-50]="isDragging()"
+            [class.dark:bg-indigo-900]="isDragging()"
+            class="relative w-full h-48 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col items-center justify-center transition-all overflow-hidden"
+          >
+            <input 
+              type="file" 
+              accept="audio/*" 
+              (change)="onFileSelected($event)" 
+              class="absolute inset-0 opacity-0 cursor-pointer z-10"
+            />
+            
+            @if (!uploadedFile()) {
+              <div class="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-4">
+                <lucide-icon name="upload" [size]="24"></lucide-icon>
+              </div>
+              <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Click or drag file to upload</p>
+              <p class="text-xs text-slate-400 dark:text-slate-500">MP3, WAV, M4A up to 10MB</p>
+            } @else {
+              <div class="flex flex-col items-center z-20 pointer-events-none">
+                <div class="w-14 h-14 rounded-full bg-indigo-600 text-white flex items-center justify-center mb-3 shadow-md">
+                  <lucide-icon name="file-audio" [size]="28"></lucide-icon>
+                </div>
+                <p class="text-sm font-medium text-slate-800 dark:text-white text-center max-w-[200px] truncate">{{ uploadedFile()?.name }}</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">{{ (uploadedFile()?.size || 0) / 1024 | number:'1.1-1' }} KB</p>
+              </div>
+              <button (click)="uploadedFile.set(null); $event.stopPropagation()" class="absolute top-2 right-2 z-30 p-1.5 rounded-full bg-white dark:bg-slate-800 text-slate-400 hover:text-red-500 shadow-sm border border-slate-100 dark:border-slate-700">
+                 <lucide-icon name="x" [size]="16"></lucide-icon>
+              </button>
+            }
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <button 
+          (click)="submit()"
+          [disabled]="isSubmitting() || titleControl.invalid || (!recordedBlob() && !uploadedFile())"
+          class="w-full py-3.5 rounded-xl bg-indigo-600 text-white font-medium shadow-lg shadow-indigo-200 dark:shadow-indigo-900/50 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+        >
+          @if (isSubmitting()) {
+            <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            Creating...
+          } @else {
+            Create & Share
+          }
+        </button>
+      </div>
+    </div>
+  `
+})
+export class HomeComponent implements OnDestroy {
+  audioService = inject(AudioService);
+  router = inject(Router);
+
+  titleControl = new FormControl('', [Validators.required, Validators.minLength(3)]);
+  mode = signal<'record' | 'upload'>('record');
+
+  // Recording State
+  isRecording = signal(false);
+  recordingTime = signal(0);
+  recordedBlob = signal<Blob | null>(null);
+  recordedUrl = computed(() => {
+    const blob = this.recordedBlob();
+    return blob ? URL.createObjectURL(blob) : null;
+  });
+
+  private mediaRecorder: MediaRecorder | null = null;
+  private chunks: Blob[] = [];
+  private timerInterval: any;
+
+  // Upload State
+  uploadedFile = signal<File | null>(null);
+  isDragging = signal(false);
+
+  // Submit State
+  isSubmitting = signal(false);
+
+  // Error State
+  errorMessage = signal<string | null>(null);
+
+  async toggleRecording() {
+    if (this.isRecording()) {
+      this.stopRecording();
+    } else {
+      await this.startRecording();
+    }
+  }
+
+  private async startRecording() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      this.errorMessage.set('Audio recording is not supported in this browser or environment (requires secure context like https or localhost).');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.mediaRecorder = new MediaRecorder(stream);
+      this.chunks = [];
+
+      this.mediaRecorder.ondataavailable = (e) => {
+        this.chunks.push(e.data);
+      };
+
+      this.mediaRecorder.onstop = () => {
+        const blob = new Blob(this.chunks, { type: 'audio/webm' });
+        this.recordedBlob.set(blob);
+        this.stream?.getTracks().forEach(track => track.stop());
+      };
+
+      this.stream = stream;
+      this.mediaRecorder.start();
+      this.isRecording.set(true);
+      this.startTimer();
+    } catch (err: any) {
+      console.error('Error accessing microphone', err);
+      if (err.name === 'NotAllowedError') {
+        this.errorMessage.set('Microphone access denied. Please check your browser settings.');
+      } else if (err.name === 'NotFoundError') {
+        this.errorMessage.set('No microphone found. Please connect a microphone.');
+      } else {
+        this.errorMessage.set('Could not access microphone: ' + (err.message || 'Unknown error'));
+      }
+    }
+  }
+
+  private stream: MediaStream | null = null;
+
+  private stopRecording() {
+    if (this.mediaRecorder && this.isRecording()) {
+      this.mediaRecorder.stop();
+      this.isRecording.set(false);
+      this.stopTimer();
+    }
+  }
+
+  resetRecording() {
+    this.recordedBlob.set(null);
+    this.chunks = [];
+  }
+
+  private startTimer() {
+    this.recordingTime.set(0);
+    this.timerInterval = setInterval(() => {
+      this.recordingTime.update(t => t + 1);
+    }, 1000);
+  }
+
+  private stopTimer() {
+    clearInterval(this.timerInterval);
+  }
+
+  // Upload Logic
+  onFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (input.files?.length) {
+      this.validateAndSetFile(input.files[0]);
+    }
+  }
+
+  onDragOver(e: DragEvent) {
+    e.preventDefault();
+    this.isDragging.set(true);
+  }
+
+  onDragLeave(e: DragEvent) {
+    e.preventDefault();
+    this.isDragging.set(false);
+  }
+
+  onDrop(e: DragEvent) {
+    e.preventDefault();
+    this.isDragging.set(false);
+    if (e.dataTransfer?.files.length) {
+      this.validateAndSetFile(e.dataTransfer.files[0]);
+    }
+  }
+
+  private validateAndSetFile(file: File) {
+    if (file.type.startsWith('audio/')) {
+      this.uploadedFile.set(file);
+    } else {
+      alert('Please upload an audio file.');
+    }
+  }
+
+  // Submit Logic
+  submit() {
+    if (this.titleControl.invalid) return;
+
+    const blob = this.mode() === 'record' ? this.recordedBlob() : this.uploadedFile();
+    if (!blob) return;
+
+    this.isSubmitting.set(true);
+    this.audioService.createAudio(blob, this.titleControl.value!).subscribe({
+      next: (id) => {
+        this.router.navigate(['/s', id]);
+      },
+      error: (err) => {
+        console.error(err);
+        this.isSubmitting.set(false);
+      }
+    });
+  }
+
+  ngOnDestroy() {
+    this.stopTimer();
+    if (this.stream) {
+      this.stream.getTracks().forEach(t => t.stop());
+    }
+  }
+}

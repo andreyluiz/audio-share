@@ -66,47 +66,50 @@ import { LucideAngularModule } from 'lucide-angular';
         </div>
 
         <!-- Record Mode -->
-        <div *ngIf="mode() === 'record'" class="flex flex-col items-center justify-center py-8 min-h-[12rem] bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 mb-6">
-          
-          @if (!recordedBlob()) {
-            <div class="relative mb-4 group">
-              <div *ngIf="isRecording()" class="absolute inset-0 bg-red-500 rounded-full animate-ping opacity-20"></div>
+      <div *ngIf="mode() === 'record'" class="flex flex-col items-center justify-center py-8 min-h-[12rem] bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 mb-6 relative overflow-hidden">
+        
+        <!-- Live Visualizer Background -->
+        <canvas #visualizerCanvas class="absolute inset-0 w-full h-full opacity-30 pointer-events-none"></canvas>
+
+        @if (!recordedBlob()) {
+          <div class="relative mb-4 group z-10">
+            <div *ngIf="isRecording()" class="absolute inset-0 bg-red-500 rounded-full animate-ping opacity-20"></div>
+            <button 
+              (click)="toggleRecording()"
+              [class.bg-red-500]="isRecording()"
+              [class.bg-indigo-600]="!isRecording()"
+              class="relative w-20 h-20 rounded-full flex items-center justify-center text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
+            >
+              <lucide-icon [name]="isRecording() ? 'square' : 'mic'" [size]="32"></lucide-icon>
+            </button>
+          </div>
+          <p class="text-sm font-medium text-slate-500 dark:text-slate-400 z-10">
+            {{ isRecording() ? 'Recording... ' + recordingTime() + 's' : 'Tap to Record' }}
+          </p>
+        } @else {
+          <div class="w-full px-6 z-10">
+            <div class="flex items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm mb-4">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                  <lucide-icon name="file-audio" [size]="20"></lucide-icon>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-slate-700 dark:text-slate-200">Recorded Audio</p>
+                  <p class="text-xs text-slate-400 dark:text-slate-500">{{ (recordedBlob()?.size || 0) / 1024 | number:'1.0-1'}} KB</p>
+                </div>
+              </div>
               <button 
-                (click)="toggleRecording()"
-                [class.bg-red-500]="isRecording()"
-                [class.bg-indigo-600]="!isRecording()"
-                class="relative w-20 h-20 rounded-full flex items-center justify-center text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
+                (click)="resetRecording()"
+                class="text-xs font-medium text-red-500 hover:text-red-600 px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
               >
-                <lucide-icon [name]="isRecording() ? 'square' : 'mic'" [size]="32"></lucide-icon>
+                Delete
               </button>
             </div>
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
-              {{ isRecording() ? 'Recording... ' + recordingTime() + 's' : 'Tap to Record' }}
-            </p>
-          } @else {
-            <div class="w-full px-6">
-              <div class="flex items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm mb-4">
-                <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                    <lucide-icon name="file-audio" [size]="20"></lucide-icon>
-                  </div>
-                  <div>
-                    <p class="text-sm font-medium text-slate-700 dark:text-slate-200">Recorded Audio</p>
-                    <p class="text-xs text-slate-400 dark:text-slate-500">{{ (recordedBlob()?.size || 0) / 1024 | number:'1.0-1'}} KB</p>
-                  </div>
-                </div>
-                <button 
-                  (click)="resetRecording()"
-                  class="text-xs font-medium text-red-500 hover:text-red-600 px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                >
-                  Delete
-                </button>
-              </div>
-              
-              <audio [src]="recordedUrl()" controls class="w-full mb-2"></audio>
-            </div>
-          }
-        </div>
+            
+            <audio [src]="recordedUrl()" controls class="w-full mb-2"></audio>
+          </div>
+        }
+      </div>
 
         <!-- Upload Mode -->
         <div *ngIf="mode() === 'upload'" class="mb-6">
@@ -168,31 +171,55 @@ export class HomeComponent implements OnDestroy {
   audioService = inject(AudioService);
   router = inject(Router);
 
-  titleControl = new FormControl('', [Validators.required, Validators.minLength(3)]);
-  mode = signal<'record' | 'upload'>('record');
+  @ViewChild('visualizerCanvas') visualizerCanvas!: ElementRef<HTMLCanvasElement>;
 
-  // Recording State
+  // Form Controls
+  titleControl = new FormControl('', [Validators.required, Validators.minLength(3)]);
+
+  // UI State
+  mode = signal<'record' | 'upload'>('record');
   isRecording = signal(false);
   recordingTime = signal(0);
+
+  // Audio State
   recordedBlob = signal<Blob | null>(null);
-  recordedUrl = computed(() => {
-    const blob = this.recordedBlob();
-    return blob ? URL.createObjectURL(blob) : null;
-  });
-
-  private mediaRecorder: MediaRecorder | null = null;
-  private chunks: Blob[] = [];
-  private timerInterval: any;
-
-  // Upload State
+  recordedUrl = signal<string | null>(null); // Changed from computed to signal as per instruction
   uploadedFile = signal<File | null>(null);
   isDragging = signal(false);
 
   // Submit State
   isSubmitting = signal(false);
 
+  // Media Recorder State
+  private mediaRecorder: MediaRecorder | null = null;
+  private audioChunks: Blob[] = []; // Renamed from 'chunks'
+  private timerInterval: any;
+
+  // Audio Visualizer State
+  private audioContext: AudioContext | null = null;
+  private analyser: AnalyserNode | null = null;
+  private dataArray: Uint8Array | null = null;
+  private animationId: number | null = null;
+  private stream: MediaStream | null = null; // Moved stream here
+
   // Error State
   errorMessage = signal<string | null>(null);
+
+  ngOnDestroy() {
+    this.stopWrapper();
+  }
+
+  private stopWrapper() {
+    this.stopTimer();
+    if (this.mediaRecorder && this.isRecording()) {
+      this.mediaRecorder.stop();
+    }
+    if (this.stream) { // Ensure stream tracks are stopped
+      this.stream.getTracks().forEach(t => t.stop());
+      this.stream = null;
+    }
+    this.cancelVisualization();
+  }
 
   async toggleRecording() {
     if (this.isRecording()) {
@@ -210,23 +237,29 @@ export class HomeComponent implements OnDestroy {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.stream = stream; // Store the stream
       this.mediaRecorder = new MediaRecorder(stream);
-      this.chunks = [];
+      this.audioChunks = [];
 
-      this.mediaRecorder.ondataavailable = (e) => {
-        this.chunks.push(e.data);
+      // Setup Visualizer
+      this.setupVisualizer(stream);
+
+      this.mediaRecorder.ondataavailable = (event) => {
+        this.audioChunks.push(event.data);
       };
 
       this.mediaRecorder.onstop = () => {
-        const blob = new Blob(this.chunks, { type: 'audio/webm' });
+        const blob = new Blob(this.audioChunks, { type: 'audio/webm' });
         this.recordedBlob.set(blob);
-        this.stream?.getTracks().forEach(track => track.stop());
+        this.recordedUrl.set(URL.createObjectURL(blob));
+        // Stream tracks are stopped in stopWrapper or resetRecording if needed
+        this.cancelVisualization();
       };
 
-      this.stream = stream;
       this.mediaRecorder.start();
       this.isRecording.set(true);
       this.startTimer();
+      this.visualize();
     } catch (err: any) {
       console.error('Error accessing microphone', err);
       if (err.name === 'NotAllowedError') {
@@ -239,19 +272,97 @@ export class HomeComponent implements OnDestroy {
     }
   }
 
-  private stream: MediaStream | null = null;
-
   private stopRecording() {
-    if (this.mediaRecorder && this.isRecording()) {
+    if (this.mediaRecorder) {
       this.mediaRecorder.stop();
       this.isRecording.set(false);
       this.stopTimer();
+      // The onstop event handler will take care of recordedBlob, recordedUrl, and cancelVisualization
+    }
+  }
+
+  private setupVisualizer(stream: MediaStream) {
+    this.audioContext = new AudioContext();
+    const source = this.audioContext.createMediaStreamSource(stream);
+    this.analyser = this.audioContext.createAnalyser();
+    this.analyser.fftSize = 256;
+    source.connect(this.analyser);
+    const bufferLength = this.analyser.frequencyBinCount;
+    this.dataArray = new Uint8Array(bufferLength);
+  }
+
+  private visualize() {
+    if (!this.analyser || !this.visualizerCanvas) return;
+
+    const canvas = this.visualizerCanvas.nativeElement;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Set canvas dimensions for proper drawing
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+
+    const width = canvas.width;
+    const height = canvas.height;
+
+    const draw = () => {
+      this.animationId = requestAnimationFrame(draw);
+
+      if (this.analyser && this.dataArray) {
+        this.analyser.getByteFrequencyData(this.dataArray as any);
+      }
+
+      ctx.clearRect(0, 0, width, height);
+
+      if (!this.dataArray) return;
+
+      const barWidth = (width / this.dataArray.length) * 2.5;
+      let barHeight;
+      let x = 0;
+
+      for (let i = 0; i < this.dataArray.length; i++) {
+        barHeight = this.dataArray[i] / 2;
+
+        // Gradient for bars
+        const gradient = ctx.createLinearGradient(0, height, 0, height - barHeight);
+        gradient.addColorStop(0, '#6366f1'); // Indigo 500
+        gradient.addColorStop(1, '#a5b4fc'); // Indigo 300
+
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x, height - barHeight, barWidth, barHeight);
+
+        x += barWidth + 1;
+      }
+    };
+
+    draw();
+  }
+
+  private cancelVisualization() {
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
+    }
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+    }
+    // Clear canvas
+    if (this.visualizerCanvas?.nativeElement) {
+      const ctx = this.visualizerCanvas.nativeElement.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, this.visualizerCanvas.nativeElement.width, this.visualizerCanvas.nativeElement.height);
     }
   }
 
   resetRecording() {
     this.recordedBlob.set(null);
-    this.chunks = [];
+    this.recordedUrl.set(null); // Clear the URL
+    this.audioChunks = [];
+    if (this.stream) { // Stop stream tracks if recording was active
+      this.stream.getTracks().forEach(t => t.stop());
+      this.stream = null;
+    }
+    this.cancelVisualization(); // Ensure visualizer is off
   }
 
   private startTimer() {
@@ -262,40 +373,39 @@ export class HomeComponent implements OnDestroy {
   }
 
   private stopTimer() {
-    clearInterval(this.timerInterval);
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
   }
 
   // Upload Logic
-  onFileSelected(event: Event) {
-    const input = event.target as HTMLInputElement;
-    if (input.files?.length) {
-      this.validateAndSetFile(input.files[0]);
+  onFileSelected(event: any) {
+    const file = event.target.files[0];
+    if (file && file.type.startsWith('audio/')) {
+      this.uploadedFile.set(file);
     }
   }
 
-  onDragOver(e: DragEvent) {
-    e.preventDefault();
+  onDragOver(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
     this.isDragging.set(true);
   }
 
-  onDragLeave(e: DragEvent) {
-    e.preventDefault();
+  onDragLeave(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
     this.isDragging.set(false);
   }
 
-  onDrop(e: DragEvent) {
-    e.preventDefault();
+  onDrop(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
     this.isDragging.set(false);
-    if (e.dataTransfer?.files.length) {
-      this.validateAndSetFile(e.dataTransfer.files[0]);
-    }
-  }
-
-  private validateAndSetFile(file: File) {
-    if (file.type.startsWith('audio/')) {
+    const file = event.dataTransfer?.files[0];
+    if (file && file.type.startsWith('audio/')) {
       this.uploadedFile.set(file);
-    } else {
-      alert('Please upload an audio file.');
     }
   }
 
@@ -303,25 +413,26 @@ export class HomeComponent implements OnDestroy {
   submit() {
     if (this.titleControl.invalid) return;
 
-    const blob = this.mode() === 'record' ? this.recordedBlob() : this.uploadedFile();
-    if (!blob) return;
+    const blob = this.recordedBlob();
+    const file = this.uploadedFile();
+
+    if (!blob && !file) return;
 
     this.isSubmitting.set(true);
-    this.audioService.createAudio(blob, this.titleControl.value!).subscribe({
+    const title = this.titleControl.value!;
+
+    // Determine what to upload
+    const uploadData = blob || file!;
+
+    this.audioService.createAudio(uploadData, title).subscribe({
       next: (id) => {
         this.router.navigate(['/s', id]);
       },
       error: (err) => {
-        console.error(err);
+        console.error('Upload failed', err);
         this.isSubmitting.set(false);
+        this.errorMessage.set('Upload failed. Please try again.');
       }
     });
-  }
-
-  ngOnDestroy() {
-    this.stopTimer();
-    if (this.stream) {
-      this.stream.getTracks().forEach(t => t.stop());
-    }
   }
 }

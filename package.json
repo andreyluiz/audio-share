@@ -35,7 +35,8 @@
     "lucide-angular": "^0.561.0",
     "qrcode": "^1.5.4",
     "rxjs": "~7.8.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "wavesurfer.js": "^7.12.1"
   },
   "devDependencies": {
     "@angular/build": "^21.0.3",

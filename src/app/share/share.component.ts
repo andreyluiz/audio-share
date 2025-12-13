@@ -4,6 +4,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AudioService, AudioRecord } from '../services/audio.service';
 import { LucideAngularModule } from 'lucide-angular';
 import * as QRCode from 'qrcode';
+import WaveSurfer from 'wavesurfer.js';
 
 @Component({
   selector: 'app-share',
@@ -35,8 +36,18 @@ import * as QRCode from 'qrcode';
           <p class="text-sm text-slate-500 dark:text-slate-400">Shared via AudioShare</p>
         </div>
 
-        <div class="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 mb-8">
-          <audio [src]="audioUrl()" controls class="w-full"></audio>
+        <!-- Audio Player Custom -->
+        <div class="mb-8">
+            <div #waveform class="w-full mb-4"></div>
+            
+            <div class="flex justify-center">
+                <button 
+                  (click)="togglePlay()"
+                  class="w-16 h-16 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center shadow-lg transition-transform active:scale-95"
+                >
+                  <lucide-icon [name]="isPlaying() ? 'pause' : 'play'" [size]="32"></lucide-icon>
+                </button>
+            </div>
         </div>
 
         <div class="space-y-6">
@@ -88,6 +99,9 @@ export class ShareComponent implements OnInit, AfterViewInit {
   copied = signal(false);
 
   @ViewChild('qrCanvas') qrCanvas!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('waveform', { static: false }) waveformContainer!: ElementRef<HTMLElement>;
+  private wavesurfer: WaveSurfer | null = null;
+  isPlaying = signal(false);
 
   async ngOnInit() {
     const id = this.route.snapshot.paramMap.get('id');
@@ -101,26 +115,70 @@ export class ShareComponent implements OnInit, AfterViewInit {
 
     this.audioService.getAudio(id).subscribe({
       next: (record) => {
+        this.loading.set(false); // Update view state first to render the @else block containing #waveform
+
         if (record) {
           this.audio.set(record);
-          this.audioUrl.set(record.public_url); // Use public URL from Supabase
           this.generateQR();
+          // Initialize WaveSurfer after view update confirm
+          setTimeout(() => this.initWaveSurfer(record.public_url), 50);
         } else {
           this.error.set(true);
         }
-        this.loading.set(false);
       },
       error: () => {
-        this.error.set(true);
         this.loading.set(false);
+        this.error.set(true);
       }
     });
   }
 
   ngAfterViewInit() {
-    // Attempt QR generation if data is already ready (unlikely due to delay, but safe)
-    if (this.audio()) {
-      this.generateQR();
+    // QR generation handled in subscribe
+  }
+
+  ngOnDestroy() {
+    if (this.wavesurfer) {
+      this.wavesurfer.destroy();
+    }
+  }
+
+  private initWaveSurfer(url: string) {
+    if (this.wavesurfer) return; // Already initialized
+
+    if (!this.waveformContainer) {
+      console.error('Waveform container not found!');
+      return;
+    }
+
+    console.log('Initializing WaveSurfer with URL:', url);
+
+    this.wavesurfer = WaveSurfer.create({
+      container: this.waveformContainer.nativeElement,
+      waveColor: '#a5b4fc', // Indigo 300
+      progressColor: '#4f46e5', // Indigo 600
+      cursorColor: '#4338ca',
+      barWidth: 2,
+      barGap: 3,
+      barRadius: 3,
+      height: 128,
+      normalize: true,
+      backend: 'MediaElement', // Try MediaElement to avoid CORS issues with Web Audio
+    });
+
+    this.wavesurfer.load(url);
+
+    this.wavesurfer.on('ready', () => console.log('WaveSurfer Ready'));
+    this.wavesurfer.on('error', (e) => console.error('WaveSurfer Error:', e));
+    this.wavesurfer.on('play', () => this.isPlaying.set(true));
+    this.wavesurfer.on('pause', () => this.isPlaying.set(false));
+    this.wavesurfer.on('finish', () => this.isPlaying.set(false));
+  }
+
+  togglePlay() {
+    console.log('Toggle Play Clicked. Instance:', !!this.wavesurfer);
+    if (this.wavesurfer) {
+      this.wavesurfer.playPause();
     }
   }
 

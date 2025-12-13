@@ -43,7 +43,9 @@ import * as QRCode from 'qrcode';
           <!-- QR Code -->
           <div class="flex flex-col items-center justify-center p-6 bg-white dark:bg-slate-700 border-2 border-dashed border-slate-200 dark:border-slate-600 rounded-xl relative overflow-hidden group">
              <canvas #qrCanvas class="w-48 h-48"></canvas>
-             <div class="mt-4 text-xs font-medium text-slate-400 dark:text-slate-300 uppercase tracking-wider">Scan to Listen</div>
+             <button (click)="shareQR()" class="mt-4 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 uppercase tracking-wider flex items-center gap-1 active:scale-95 transition-transform">
+                <lucide-icon name="share-2" [size]="14"></lucide-icon> Share QR
+             </button>
           </div>
 
           <!-- Link Copy -->
@@ -101,7 +103,7 @@ export class ShareComponent implements OnInit, AfterViewInit {
       next: (record) => {
         if (record) {
           this.audio.set(record);
-          this.audioUrl.set(URL.createObjectURL(record.blob));
+          this.audioUrl.set(record.public_url); // Use public URL from Supabase
           this.generateQR();
         } else {
           this.error.set(true);
@@ -140,6 +142,30 @@ export class ShareComponent implements OnInit, AfterViewInit {
         });
       }
     }, 100);
+  }
+
+  shareQR() {
+    const canvas = this.qrCanvas?.nativeElement;
+    if (!canvas) return;
+
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const file = new File([blob], 'audio-share-qr.png', { type: 'image/png' });
+
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: this.audio()?.title || 'Shared Audio',
+            text: 'Scan this QR code to listen to the audio.',
+            files: [file]
+          });
+        } catch (err) {
+          console.error('Error sharing', err);
+        }
+      } else {
+        alert('Sharing not supported on this device/browser.');
+      }
+    });
   }
 
   copyLink() {

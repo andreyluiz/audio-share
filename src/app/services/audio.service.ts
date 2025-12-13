@@ -1,41 +1,71 @@
-import { Injectable, signal } from '@angular/core';
-import { Observable, of, delay, map } from 'rxjs';
+import { Injectable } from '@angular/core';
+import { Observable, from, map, switchMap } from 'rxjs';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { environment } from '../../environments/environment';
 
 export interface AudioRecord {
     id: string;
+    created_at?: Date;
     title: string;
-    blob: Blob;
-    createdAt: Date;
+    file_name: string;
+    mime_type: string;
+    storage_path: string;
+    public_url: string;
+    transcription?: string;
+    summary?: string;
+    blob?: Blob; // Helper for client-side usage, not in DB
 }
 
 @Injectable({
     providedIn: 'root'
 })
 export class AudioService {
-    // In-memory storage for mock purpose
-    private storage = new Map<string, AudioRecord>();
+    private supabase: SupabaseClient;
 
-    constructor() { }
+    constructor() {
+        this.supabase = createClient(environment.supabaseUrl, environment.supabaseKey);
+    }
 
     createAudio(blob: Blob, title: string): Observable<string> {
-        const id = this.generateId();
-        const record: AudioRecord = {
-            id,
-            title,
-            blob,
-            createdAt: new Date()
-        };
-        this.storage.set(id, record);
-        // Simulate network delay
-        return of(id).pipe(delay(500));
+        const fileExt = blob.type.split('/')[1] || 'webm';
+        const fileName = `${crypto.randomUUID()}.${fileExt}`;
+        const filePath = `${fileName}`; // bucket/filename
+
+        // 1. Upload to Storage
+        return from(this.supabase.storage.from('audios').upload(filePath, blob, {
+            contentType: blob.type,
+            upsert: false
+        })).pipe(
+            switchMap(({ data, error }) => {
+                if (error) throw error;
+
+                // 2. Get Public URL
+                const { data: { publicUrl } } = this.supabase.storage.from('audios').getPublicUrl(filePath);
+
+                // 3. Insert into Database
+                const dbRecord = {
+                    title: title,
+                    file_name: fileName,
+                    mime_type: blob.type,
+                    storage_path: filePath,
+                    public_url: publicUrl
+                };
+
+                return from(this.supabase.from('audios').insert(dbRecord).select().single());
+            }),
+            map(({ data, error }) => {
+                if (error) throw error;
+                return data.id;
+            })
+        );
     }
 
     getAudio(id: string): Observable<AudioRecord | undefined> {
-        const record = this.storage.get(id);
-        return of(record).pipe(delay(300));
-    }
-
-    private generateId(): string {
-        return Math.random().toString(36).substring(2, 9);
+        return from(this.supabase.from('audios').select('*').eq('id', id).single()).pipe(
+            map(({ data, error }) => {
+                if (error || !data) return undefined;
+                return data as AudioRecord;
+            })
+        );
     }
 }

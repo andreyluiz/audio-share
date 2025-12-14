@@ -275,21 +275,28 @@ export class HomeComponent implements OnDestroy {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       this.stream = stream; // Store the stream
-      this.mediaRecorder = new MediaRecorder(stream);
+
+      const mimeType = this.getSupportedMimeType();
+      console.log('Recording with MIME type:', mimeType);
+
+      this.mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       this.audioChunks = [];
 
       // Setup Visualizer
-      this.setupVisualizer(stream);
+      await this.setupVisualizer(stream);
 
       this.mediaRecorder.ondataavailable = (event) => {
-        this.audioChunks.push(event.data);
+        if (event.data && event.data.size > 0) {
+          this.audioChunks.push(event.data);
+        }
       };
 
       this.mediaRecorder.onstop = () => {
-        const blob = new Blob(this.audioChunks, { type: 'audio/webm' });
+        const type = this.mediaRecorder?.mimeType || mimeType || 'audio/webm';
+        console.log('Final Blob Type:', type);
+        const blob = new Blob(this.audioChunks, { type });
         this.recordedBlob.set(blob);
         this.recordedUrl.set(URL.createObjectURL(blob));
-        // Stream tracks are stopped in stopWrapper or resetRecording if needed
         this.cancelVisualization();
       };
 
@@ -485,5 +492,22 @@ export class HomeComponent implements OnDestroy {
         this.errorMessage.set('Upload failed. Please try again.');
       }
     });
+  }
+
+  private getSupportedMimeType(): string {
+    const types = [
+      'audio/mp4', // Safari preferred
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg',
+      'audio/aac'
+    ];
+
+    for (const type of types) {
+      if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(type)) {
+        return type;
+      }
+    }
+    return '';
   }
 }

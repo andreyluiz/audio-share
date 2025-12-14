@@ -37,7 +37,16 @@ export class AudioService {
     }
 
     createAudio(blob: Blob, title: string, imageFile?: File): Observable<string> {
-        const fileExt = blob.type.split('/')[1] || 'webm';
+        let fileExt = 'webm';
+        if (blob.type.includes('audio/mp4')) {
+            fileExt = 'mp4';
+        } else if (blob.type.includes('audio/aac')) {
+            fileExt = 'aac';
+        } else if (blob.type.includes('audio/ogg')) {
+            fileExt = 'ogg';
+        } else if (blob.type.includes('audio/wav')) {
+            fileExt = 'wav';
+        }
         const fileName = `${crypto.randomUUID()}.${fileExt}`;
         const filePath = `${fileName}`; // bucket/filename
 

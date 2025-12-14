@@ -54,3 +54,9 @@ You are an expert in TypeScript, Angular, and scalable web application developme
 - Design services around a single responsibility
 - Use the `providedIn: 'root'` option for singleton services
 - Use the `inject()` function instead of constructor injection
+
+## Code quality
+
+- Do not use `console.log` in production code
+- VERY IMPORTANT! Always check each of the changed files for build errors and warnings. Run `npm run build` before saying "I've fixed the issue".
+- Do not produce broken, non-functional code. Do not complete the task if it's not working.

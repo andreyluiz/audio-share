@@ -181,6 +181,12 @@ export class ShareComponent implements OnInit, AfterViewInit {
 
     console.log('Initializing WaveSurfer with URL:', url);
 
+    // Safari detection
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent || '') ||
+      /iPad|iPhone|iPod/i.test(navigator.userAgent || '');
+
+    console.log('Browser detection - isSafari:', isSafari);
+
     this.wavesurfer = WaveSurfer.create({
       container: this.waveformContainer.nativeElement,
       waveColor: '#a5b4fc', // Indigo 300
@@ -191,7 +197,7 @@ export class ShareComponent implements OnInit, AfterViewInit {
       barRadius: 3,
       height: 128,
       normalize: true,
-      backend: 'MediaElement', // Try MediaElement to avoid CORS issues with Web Audio
+      backend: isSafari ? 'MediaElement' : 'WebAudio', // Use MediaElement for Safari to avoid decoding errors
     });
 
     this.wavesurfer.load(url);
